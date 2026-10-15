@@ -13,6 +13,7 @@
 - vlmcsd KMS
 - Podman + LuCI Podman 管理界面
 - Podman 默认使用 rootful 模式、netavark 网络和 nftables 防火墙，首次启动会自动启用 Podman 服务并初始化容器存储目录
+- 固件启动时自动挂载 cgroup v2，并在 cgroup v2 不可用时不启动 Podman
 - Podman 容器网络使用 Aardvark DNS，仅监听容器网络地址，不会抢占旁路由 `10.0.0.2` 的系统 DNS 端口
 - 保留无线驱动和固件支持，包含 N1 的 BCM43455/AP6255 无线固件
 - 固件首次启动默认关闭所有无线 radio，需要时可在 LuCI 中手动启用

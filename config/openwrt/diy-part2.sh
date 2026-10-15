@@ -268,6 +268,68 @@ else
     exit 1
 fi
 
+# Podman requires a cgroup v2 hierarchy at the conventional path. OpenWrt's
+# base-files package does not mount it automatically on every supported
+# kernel, so install a small idempotent service before Podman's START=99
+# service. Keep this in the source customization script so it follows future
+# OpenWrt branches without maintaining a second rootfs tree.
+cgroup_init_file="files/etc/init.d/personal-cgroup"
+rm -f "${cgroup_init_file}"
+mkdir -p "$(dirname "${cgroup_init_file}")"
+cat >"${cgroup_init_file}" <<'EOF'
+#!/bin/sh /etc/rc.common
+
+START=95
+STOP=01
+
+cgroup_mount="/sys/fs/cgroup"
+
+mounted_type() {
+    awk -v target="${cgroup_mount}" '
+        $5 == target {
+            for (i = 6; i <= NF; i++) {
+                if ($i == "-") {
+                    print $(i + 1)
+                    exit
+                }
+            }
+        }
+    ' /proc/self/mountinfo
+}
+
+start() {
+    mkdir -p "${cgroup_mount}"
+
+    current_type="$(mounted_type)"
+    if [ "${current_type}" = "cgroup2" ] &&
+        [ -r "${cgroup_mount}/cgroup.controllers" ]; then
+        return 0
+    fi
+
+    if [ -n "${current_type}" ]; then
+        logger -t personal-cgroup \
+            "${cgroup_mount} is already mounted as ${current_type}; cgroup2 is required"
+        return 1
+    fi
+
+    if ! mount -t cgroup2 cgroup2 "${cgroup_mount}"; then
+        logger -t personal-cgroup "unable to mount cgroup2 at ${cgroup_mount}"
+        return 1
+    fi
+
+    if [ "$(mounted_type)" != "cgroup2" ] ||
+        [ ! -r "${cgroup_mount}/cgroup.controllers" ]; then
+        logger -t personal-cgroup "cgroup2 mount verification failed"
+        return 1
+    fi
+}
+
+stop() {
+    return 0
+}
+EOF
+chmod +x "${cgroup_init_file}"
+
 # Prepare a rootful Podman installation on first boot. The storage paths are
 # deliberately kept on the normal overlay filesystem; users can move them to
 # a larger disk later without guessing a device or mount point here.
@@ -279,9 +341,19 @@ cat >"${podman_defaults_file}" <<'EOF'
 
 mkdir -p /var/lib/containers/storage /run/containers/storage /run/podman
 
-if [ -x /etc/init.d/podman ]; then
-    /etc/init.d/podman enable
-    /etc/init.d/podman start
+if [ -x /etc/init.d/personal-cgroup ]; then
+    /etc/init.d/personal-cgroup enable
+fi
+
+if [ -x /etc/init.d/personal-cgroup ] &&
+    /etc/init.d/personal-cgroup start &&
+    [ -r /sys/fs/cgroup/cgroup.controllers ]; then
+    if [ -x /etc/init.d/podman ]; then
+        /etc/init.d/podman enable
+        /etc/init.d/podman start
+    fi
+else
+    logger -t personal-podman "Podman not started: cgroup2 is unavailable" 2>/dev/null || true
 fi
 
 # The LuCI package's migration script has already moved this configuration by
