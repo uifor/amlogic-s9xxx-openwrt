@@ -56,6 +56,8 @@ unset_package_family "kmod-ipt(-|$)"
 unset_package_family "kmod-iptables"
 unset_package_family "kmod-nf-ipt"
 unset_package_family "kmod-nft-compat"
+unset_package_family "br-netfilter"
+unset_package_family "sched-connmark"
 unset_package_family "nf-ipvs"
 unset_package_family "libip[46]tc"
 unset_package_family "iptext"
@@ -64,6 +66,7 @@ set_package nftables-json
 set_package miniupnpd-nftables
 
 # Keep the kernel-side nftables features needed by Nikki and firewall4.
+set_package kmod-nft-bridge
 set_package kmod-nft-socket
 set_package kmod-nft-tproxy
 set_package kmod-tun
