@@ -11,3 +11,8 @@ fi
 
 grep -q '^CONFIG_PACKAGE_firewall4=y$' .config
 grep -q '^CONFIG_PACKAGE_nftables-json=y$' .config
+if grep -q '^CONFIG_PACKAGE_kmod-nft-compat=[ym]$' .config; then
+    echo "The nftables compatibility kernel module must remain disabled:" >&2
+    grep '^CONFIG_PACKAGE_kmod-nft-compat=' .config >&2
+    exit 1
+fi

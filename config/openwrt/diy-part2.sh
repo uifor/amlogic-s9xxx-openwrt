@@ -55,6 +55,7 @@ unset_package_family "(opkg|iptables|ip6tables|xtables|ipset)"
 unset_package_family "kmod-ipt(-|$)"
 unset_package_family "kmod-iptables"
 unset_package_family "kmod-nf-ipt"
+unset_package_family "kmod-nft-compat"
 set_package firewall4
 set_package nftables-json
 set_package miniupnpd-nftables
@@ -92,6 +93,8 @@ set_package luci-app-vlmcsd
 set_package podman
 set_package luci-app-podman
 set_package luci-i18n-podman-zh-cn
+set_package netavark
+set_package aardvark-dns
 
 # Default IP and root password are handled by the upstream build scripts.
 if [[ "${openwrt_ip}" != "${default_ip}" ]]; then
@@ -181,3 +184,113 @@ sed -i "s|DISTRIB_SOURCEBRANCH='.*'|DISTRIB_SOURCEBRANCH='${openwrt_branch}'|g" 
 
 rm -rf package/luci-app-amlogic
 git clone --depth 1 https://github.com/ophub/luci-app-amlogic.git package/luci-app-amlogic
+
+# OpenWrt 25.12's netavark package does not yet pass the firewall backend to
+# Cargo. Netavark otherwise compiles with its upstream iptables default.
+netavark_makefile=""
+for candidate in \
+    package/feeds/packages/netavark/Makefile \
+    feeds/packages/net/netavark/Makefile; do
+    if [[ -f "${candidate}" ]]; then
+        netavark_makefile="${candidate}"
+        break
+    fi
+done
+
+[[ -n "${netavark_makefile}" ]] || {
+    echo "Unable to locate the OpenWrt netavark Makefile" >&2
+    exit 1
+}
+
+if ! grep -q 'NETAVARK_DEFAULT_FW=nftables' "${netavark_makefile}"; then
+    cat >>"${netavark_makefile}" <<'EOF'
+
+# Use netfilter nftables directly; do not build netavark around iptables.
+CARGO_PKG_VARS += NETAVARK_DEFAULT_FW=nftables
+EOF
+fi
+
+# Make the nftables backend explicit in Podman's network configuration. The
+# upstream file already defines the network table, but keep this tolerant of
+# future package layout changes.
+podman_containers_conf=""
+for candidate in \
+    package/feeds/packages/podman/files/containers.conf \
+    feeds/packages/utils/podman/files/containers.conf; do
+    if [[ -f "${candidate}" ]]; then
+        podman_containers_conf="${candidate}"
+        break
+    fi
+done
+
+[[ -n "${podman_containers_conf}" ]] || {
+    echo "Unable to locate the Podman containers.conf" >&2
+    exit 1
+}
+
+if grep -q '^\[network\]' "${podman_containers_conf}"; then
+    for setting in network_backend firewall_driver network_config_dir default_network; do
+        case "${setting}" in
+            network_backend) value='"netavark"' ;;
+            firewall_driver) value='"nftables"' ;;
+            network_config_dir) value='"/etc/containers/networks/"' ;;
+            default_network) value='"podman"' ;;
+        esac
+
+        if grep -q -E "^#?${setting}[[:space:]]*=" "${podman_containers_conf}"; then
+            sed -i -E "s|^#?${setting}[[:space:]]*=.*$|${setting} = ${value}|" \
+                "${podman_containers_conf}"
+        else
+            sed -i "/^\[network\]$/a\\${setting} = ${value}" \
+                "${podman_containers_conf}"
+        fi
+    done
+else
+    cat >>"${podman_containers_conf}" <<'EOF'
+
+[network]
+network_backend = "netavark"
+firewall_driver = "nftables"
+network_config_dir = "/etc/containers/networks/"
+default_network = "podman"
+EOF
+fi
+
+# The LuCI package ships its defaults as luci-podman-opkg and migrates them
+# during first boot. Keep the configured service priority within its 0-99
+# accepted range so the live UCI value is deterministic.
+luci_podman_defaults="package/luci-app-podman/root/etc/config/luci-podman-opkg"
+if [[ -f "${luci_podman_defaults}" ]]; then
+    sed -i "s/option init_start_priority '100'/option init_start_priority '99'/" \
+        "${luci_podman_defaults}"
+else
+    echo "Unable to locate the LuCI Podman default configuration" >&2
+    exit 1
+fi
+
+# Prepare a rootful Podman installation on first boot. The storage paths are
+# deliberately kept on the normal overlay filesystem; users can move them to
+# a larger disk later without guessing a device or mount point here.
+podman_defaults_file="files/etc/uci-defaults/99-personal-podman"
+rm -f "${podman_defaults_file}"
+mkdir -p "$(dirname "${podman_defaults_file}")"
+cat >"${podman_defaults_file}" <<'EOF'
+#!/bin/sh
+
+mkdir -p /var/lib/containers/storage /run/containers/storage /run/podman
+
+if [ -x /etc/init.d/podman ]; then
+    /etc/init.d/podman enable
+    /etc/init.d/podman start
+fi
+
+# The LuCI package's migration script has already moved this configuration by
+# this point; enforce the supported priority if the package is present.
+if [ -f /etc/config/luci-podman ]; then
+    uci set luci-podman.globals.init_start_priority='99'
+    uci commit luci-podman
+fi
+
+exit 0
+EOF
+chmod +x "${podman_defaults_file}"
