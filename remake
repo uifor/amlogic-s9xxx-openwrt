@@ -1221,24 +1221,28 @@ EOF
         sed -e "s/macaddr=.*/macaddr=${random_macaddr}:00/" "brcmfmac4356-sdio.txt" >"brcmfmac4356-sdio.azw,gtking.txt"
         # gtking/gtking pro is bcm4356 wifi/bluetooth, wifi6 module AP6275S
         sed -e "s/macaddr=.*/macaddr=${random_macaddr}:01/" "brcmfmac4375-sdio.txt" >"brcmfmac4375-sdio.azw,gtking.txt"
+        # Phicomm N1 is AP6255 (BCM43455) wifi/bluetooth
+        sed -e "s/macaddr=.*/macaddr=${random_macaddr}:02/" "brcmfmac43455-sdio.txt" >"brcmfmac43455-sdio.phicomm,n1.txt"
+        ln -sf brcmfmac43455-sdio.bin brcmfmac43455-sdio.phicomm,n1.bin
+        ln -sf brcmfmac43455-sdio.clm_blob brcmfmac43455-sdio.phicomm,n1.clm_blob
         # MXQ Pro+ is AP6330(bcm4330) wifi/bluetooth
-        sed -e "s/macaddr=.*/macaddr=${random_macaddr}:02/" "brcmfmac4330-sdio.txt" >"brcmfmac4330-sdio.crocon,mxq-pro-plus.txt"
+        sed -e "s/macaddr=.*/macaddr=${random_macaddr}:03/" "brcmfmac4330-sdio.txt" >"brcmfmac4330-sdio.crocon,mxq-pro-plus.txt"
         # HK1 Box & H96 Max X3 is bcm54339 wifi/bluetooth
-        sed -e "s/macaddr=.*/macaddr=${random_macaddr}:03/" "brcmfmac4339-sdio.ZP.txt" >"brcmfmac4339-sdio.amlogic,sm1.txt"
+        sed -e "s/macaddr=.*/macaddr=${random_macaddr}:04/" "brcmfmac4339-sdio.ZP.txt" >"brcmfmac4339-sdio.amlogic,sm1.txt"
         # new ugoos x3 is brm43456
-        sed -e "s/macaddr=.*/macaddr=${random_macaddr}:04/" "brcmfmac43456-sdio.txt" >"brcmfmac43456-sdio.amlogic,sm1.txt"
+        sed -e "s/macaddr=.*/macaddr=${random_macaddr}:05/" "brcmfmac43456-sdio.txt" >"brcmfmac43456-sdio.amlogic,sm1.txt"
         # x96max plus v5.1 (ip1001m phy) adopts am7256 (brcm4354)
-        sed -e "s/macaddr=.*/macaddr=${random_macaddr}:05/" "brcmfmac4354-sdio.txt" >"brcmfmac4354-sdio.amlogic,sm1.txt"
+        sed -e "s/macaddr=.*/macaddr=${random_macaddr}:06/" "brcmfmac4354-sdio.txt" >"brcmfmac4354-sdio.amlogic,sm1.txt"
         # panther x2 AP6212A
-        sed -e "s/macaddr=.*/macaddr=${random_macaddr}:06/" "brcmfmac43430-sdio.txt" >"brcmfmac43430-sdio.panther,x2.txt"
+        sed -e "s/macaddr=.*/macaddr=${random_macaddr}:07/" "brcmfmac43430-sdio.txt" >"brcmfmac43430-sdio.panther,x2.txt"
         # ct2000 s922x is brm4359
-        sed -i "s/macaddr=.*/macaddr=${random_macaddr}:07/" "brcmfmac4359-sdio.ali,ct2000.txt"
+        sed -i "s/macaddr=.*/macaddr=${random_macaddr}:08/" "brcmfmac4359-sdio.ali,ct2000.txt"
         # easepi-r2 is AP6256 (BCM43455) wifi/bluetooth
-        sed -e "s/macaddr=.*/macaddr=${random_macaddr}:08/" "brcmfmac43455-sdio.txt" >"brcmfmac43455-sdio.linkease,easepi-r2.txt"
+        sed -e "s/macaddr=.*/macaddr=${random_macaddr}:09/" "brcmfmac43455-sdio.txt" >"brcmfmac43455-sdio.linkease,easepi-r2.txt"
         ln -sf brcmfmac43455-sdio.bin brcmfmac43455-sdio.linkease,easepi-r2.bin
         ln -sf brcmfmac43455-sdio.clm_blob brcmfmac43455-sdio.linkease,easepi-r2.clm_blob
         # easepi-a2 is AP6255 (BCM43455) wifi/bluetooth
-        sed -e "s/macaddr=.*/macaddr=${random_macaddr}:09/" "brcmfmac43455-sdio.txt" >"brcmfmac43455-sdio.easepi,a2.txt"
+        sed -e "s/macaddr=.*/macaddr=${random_macaddr}:0A/" "brcmfmac43455-sdio.txt" >"brcmfmac43455-sdio.easepi,a2.txt"
         ln -sf brcmfmac43455-sdio.bin brcmfmac43455-sdio.easepi,a2.bin
         ln -sf brcmfmac43455-sdio.clm_blob brcmfmac43455-sdio.easepi,a2.clm_blob
     )

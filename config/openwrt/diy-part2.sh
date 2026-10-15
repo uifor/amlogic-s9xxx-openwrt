@@ -66,6 +66,18 @@ set_package kmod-tun
 set_package kmod-dummy
 set_package kmod-veth
 
+# Keep wireless support available for the N1 and optional USB/PCIe adapters.
+# The N1 uses the Broadcom/Cypress BCM43455 (AP6255) SDIO chipset.
+set_package kmod-brcmfmac
+set_package kmod-brcmutil
+set_package kmod-cfg80211
+set_package kmod-mac80211
+set_package cypress-firmware-43455-sdio
+set_package brcmfmac-nvram-43455-sdio
+set_package wifi-scripts
+set_package wireless-regdb
+set_package wpad-basic-mbedtls
+
 # Personal package set.
 set_package lucky
 set_package luci-app-lucky
@@ -80,10 +92,6 @@ set_package luci-app-vlmcsd
 set_package podman
 set_package luci-app-podman
 set_package luci-i18n-podman-zh-cn
-
-# The N1 is used as a wired device. Remove optional Wi-Fi drivers and firmware
-# from the generic seed config while retaining wired Realtek USB NIC support.
-unset_package_family "(ath[0-9]|(^|-)ath$|mt76|brcmfmac|brcmsmac|iwlwifi|mwifiex|mac80211|cfg80211|wpad|hostapd|wireless-regdb|wifi-scripts|wireless-tools|rtl(818|819|872|882|885|892))"
 
 # Default IP and root password are handled by the upstream build scripts.
 if [[ "${openwrt_ip}" != "${default_ip}" ]]; then
@@ -122,6 +130,28 @@ exit 0
 EOF
     chmod +x "${network_defaults_file}"
 fi
+
+# Keep radios disabled on the first boot. Users can enable them later from
+# LuCI or with `uci set wireless.radioX.disabled=0`.
+wireless_defaults_file="files/etc/uci-defaults/99-personal-wireless"
+rm -f "${wireless_defaults_file}"
+mkdir -p "$(dirname "${wireless_defaults_file}")"
+cat >"${wireless_defaults_file}" <<'EOF'
+#!/bin/sh
+
+# Generate the hardware-backed wireless configuration when the base image did
+# not create it yet, then disable each radio without removing its interfaces.
+[ -x /sbin/wifi ] && wifi config >/dev/null 2>&1 || true
+
+radios="$(uci -q show wireless | sed -n 's/^wireless\.\([^=]*\)=wifi-device$/\1/p')"
+for radio in ${radios}; do
+    uci set "wireless.${radio}.disabled=1"
+done
+
+[ -n "${radios}" ] && uci commit wireless
+exit 0
+EOF
+chmod +x "${wireless_defaults_file}"
 
 # Set the requested default root password. This is the MD5-crypt hash for
 # "password", matching the login expected by the personal image.
