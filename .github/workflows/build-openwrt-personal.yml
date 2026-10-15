@@ -18,15 +18,33 @@ on:
         required: true
         default: "6.12.y_6.18.y"
         type: string
+      network_mode:
+        description: "Network mode: fixed-IP bypass router or normal router"
+        required: true
+        default: "bypass"
+        type: choice
+        options:
+          - bypass
+          - router
       auto_kernel:
         description: "Use the newest matching kernel release"
         required: true
         default: true
         type: boolean
       openwrt_ip:
-        description: "Default OpenWrt IP address"
+        description: "OpenWrt management/bypass IP address"
         required: true
-        default: "192.168.1.1"
+        default: "10.0.0.2"
+        type: string
+      network_gateway:
+        description: "Upstream gateway used by bypass mode"
+        required: true
+        default: "10.0.0.1"
+        type: string
+      network_dns:
+        description: "DNS server used by bypass mode"
+        required: true
+        default: "10.0.0.1"
         type: string
       use_ccache:
         description: "Use compiler cache"
@@ -100,7 +118,10 @@ jobs:
           "${GITHUB_WORKSPACE}/config/openwrt/diy-part2.sh" \
             "${{ inputs.openwrt_ip }}" \
             "${{ inputs.use_ccache }}" \
-            "${{ inputs.openwrt_branch }}"
+            "${{ inputs.openwrt_branch }}" \
+            "${{ inputs.network_mode }}" \
+            "${{ inputs.network_gateway }}" \
+            "${{ inputs.network_dns }}"
           make defconfig
           "${GITHUB_WORKSPACE}/scripts/check-nft-only.sh"
 

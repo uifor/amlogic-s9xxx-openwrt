@@ -4,7 +4,7 @@
 
 # OpenWrt
 
-本仓库已加入个人定制入口，默认面向斐讯 N1。具体的软件包、APK、纯 nftables 和 OpenWrt 25.12 构建方式请查看 [CUSTOMIZATION.md](CUSTOMIZATION.md)。
+本仓库已加入个人定制入口，默认面向斐讯 N1。默认固件为固定地址 `10.0.0.2` 的旁路由模式，后台账号为 `root`，密码为 `password`。具体的软件包、APK、纯 nftables 和 OpenWrt 25.12 构建方式请查看 [CUSTOMIZATION.md](CUSTOMIZATION.md)。
 
 [English Instructions](README.md) | [中文说明](README.cn.md)
 

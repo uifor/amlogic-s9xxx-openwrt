@@ -8,11 +8,32 @@ ip_regex="^((25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.){3}(25[0-5]|2[0-4][0-9]|[01
 openwrt_ip="${1:-${default_ip}}"
 use_ccache="${2:-true}"
 openwrt_branch="${3:-openwrt-25.12}"
+network_mode="${4:-bypass}"
+network_gateway="${5:-10.0.0.1}"
+network_dns="${6:-10.0.0.1}"
 
 [[ "${openwrt_ip}" =~ ${ip_regex} ]] || {
     echo "Invalid OpenWrt IP address: ${openwrt_ip}" >&2
     exit 1
 }
+
+[[ "${network_gateway}" =~ ${ip_regex} ]] || {
+    echo "Invalid network gateway: ${network_gateway}" >&2
+    exit 1
+}
+
+[[ "${network_dns}" =~ ${ip_regex} ]] || {
+    echo "Invalid network DNS server: ${network_dns}" >&2
+    exit 1
+}
+
+case "${network_mode}" in
+    bypass|router) ;;
+    *)
+        echo "Invalid network mode: ${network_mode}" >&2
+        exit 1
+        ;;
+esac
 
 set_package() {
     local package="${1}"
@@ -69,6 +90,44 @@ if [[ "${openwrt_ip}" != "${default_ip}" ]]; then
     sed -i "/lan) ipad=\${ipaddr:-/s/\${ipaddr:-\"[^\"]*\"}/\${ipaddr:-\"${openwrt_ip}\"}/" \
         package/base-files/*/bin/config_generate
 fi
+
+# The N1 is a single-port device. In bypass mode it uses a fixed LAN address,
+# points its default route and resolver at the upstream router, and does not
+# run a DHCP server. Use a first-boot UCI default so board-generated devices
+# such as br-lan remain intact across OpenWrt releases.
+network_defaults_file="files/etc/uci-defaults/99-personal-network"
+rm -f "${network_defaults_file}"
+if [[ "${network_mode}" == "bypass" ]]; then
+    mkdir -p "$(dirname "${network_defaults_file}")"
+    cat >"${network_defaults_file}" <<EOF
+#!/bin/sh
+
+uci set network.lan.proto='static'
+uci set network.lan.ipaddr='${openwrt_ip}'
+uci set network.lan.netmask='255.255.255.0'
+uci set network.lan.gateway='${network_gateway}'
+uci set network.lan.peerdns='0'
+uci -q delete network.lan.dns
+uci add_list network.lan.dns='${network_dns}'
+
+uci set dhcp.lan.interface='lan'
+uci set dhcp.lan.ignore='1'
+uci set dhcp.lan.ra='disabled'
+uci set dhcp.lan.dhcpv6='disabled'
+uci set dhcp.lan.ndp='disabled'
+
+uci commit network
+uci commit dhcp
+exit 0
+EOF
+    chmod +x "${network_defaults_file}"
+fi
+
+# Set the requested default root password. This is the MD5-crypt hash for
+# "password", matching the login expected by the personal image.
+root_password_hash='$1$V4UetPzk$CYXluq4wUazHjmCDBCqXF.'
+sed -i "s#^root:[^:]*:#root:${root_password_hash}:#" \
+    package/base-files/files/etc/shadow
 
 sed -i '/CONFIG_DEVEL/d;/CONFIG_CCACHE/d;/CONFIG_CCACHE_DIR/d' .config
 if [[ "${use_ccache}" == "true" ]]; then

@@ -13,6 +13,8 @@
 - vlmcsd KMS
 - Podman + LuCI Podman 管理界面
 - 默认关闭可选无线驱动和固件
+- 默认旁路由模式，固定管理地址 `10.0.0.2`，上游网关/DNS 为 `10.0.0.1`
+- 默认后台账号 `root`，密码 `password`
 
 ## GitHub Actions
 
@@ -21,9 +23,14 @@
 - `openwrt_branch`：源码分支，例如 `openwrt-25.12` 或未来的 `openwrt-26.x`
 - `openwrt_board`：默认 `s905d`，多个机型用下划线连接
 - `openwrt_kernel`：默认 `6.12.y_6.18.y`
-- `openwrt_ip`：默认 `192.168.1.1`
+- `network_mode`：默认 `bypass`，也可以选择普通 `router` 模式
+- `openwrt_ip`：管理/旁路地址，默认 `10.0.0.2`
+- `network_gateway`：旁路模式上游网关，默认 `10.0.0.1`
+- `network_dns`：旁路模式上游 DNS，默认 `10.0.0.1`
 
 工作流会先编译通用 `armsr/armv8` rootfs，再调用上游打包器生成目标机型镜像。
+
+旁路模式会在首次启动时设置静态 LAN 地址、默认网关和 DNS，并关闭 LAN DHCP、IPv6 RA/DHCPv6/代理通告。客户端仍需将网关或 DNS 按需指向 N1，旁路模式不会修改主路由器的 DHCP 配置。
 
 ## 主要定制入口
 
