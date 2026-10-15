@@ -1,0 +1,147 @@
+name: Build Personal OpenWrt
+
+on:
+  workflow_dispatch:
+    inputs:
+      openwrt_branch:
+        description: "OpenWrt source branch, for example openwrt-25.12 or openwrt-26.x"
+        required: true
+        default: "openwrt-25.12"
+        type: string
+      openwrt_board:
+        description: "Board list separated by underscores"
+        required: true
+        default: "s905d"
+        type: string
+      openwrt_kernel:
+        description: "Kernel versions separated by underscores"
+        required: true
+        default: "6.12.y_6.18.y"
+        type: string
+      auto_kernel:
+        description: "Use the newest matching kernel release"
+        required: true
+        default: true
+        type: boolean
+      openwrt_ip:
+        description: "Default OpenWrt IP address"
+        required: true
+        default: "192.168.1.1"
+        type: string
+      use_ccache:
+        description: "Use compiler cache"
+        required: true
+        default: true
+        type: boolean
+      builder_name:
+        description: "Builder signature"
+        required: true
+        default: "personal"
+        type: string
+
+env:
+  TZ: Etc/UTC
+  CCACHE_DIR: /builder/openwrt/.ccache
+
+jobs:
+  build:
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout project
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      - name: Initialize build environment
+        env:
+          DEBIAN_FRONTEND: noninteractive
+        run: |
+          sudo apt-get -y update
+          sudo apt-get -y install $(curl -fsSL https://ophub.org/ubuntu2404-make-openwrt-depends)
+
+          root_avail=$(df --block-size=1G / | tail -1 | awk '{print $4}')
+          root_size=$((root_avail - 4))
+          [[ "${root_size}" -gt 0 ]] || { echo "Insufficient build disk space"; exit 1; }
+          sudo truncate -s "${root_size}"G /root.img
+          build_dev=$(sudo losetup --find --show /root.img)
+          sudo mkfs.xfs -f -i sparse=0 -b size=4096 "${build_dev}"
+          sudo mkdir -p /builder
+          sudo mount "${build_dev}" /builder
+          sudo chown -R runner:runner /builder
+
+      - name: Clone OpenWrt source
+        working-directory: /builder
+        run: |
+          git clone -q --single-branch --depth=1 \
+            --branch "${{ inputs.openwrt_branch }}" \
+            https://github.com/openwrt/openwrt openwrt
+          ln -s /builder/openwrt "${GITHUB_WORKSPACE}/openwrt"
+          echo "build_tag=OpenWrt_personal_${{ inputs.openwrt_branch }}_$(date +'%Y.%m')" >> "${GITHUB_ENV}"
+
+      - name: Load project configuration
+        run: |
+          cp -f config/openwrt/feeds.conf.default openwrt/feeds.conf.default
+          cp -f config/openwrt/config openwrt/.config
+          chmod +x config/openwrt/diy-part1.sh config/openwrt/diy-part2.sh scripts/check-nft-only.sh
+
+      - name: Update feeds
+        working-directory: openwrt
+        run: |
+          "${GITHUB_WORKSPACE}/config/openwrt/diy-part1.sh" "${{ inputs.openwrt_branch }}"
+          ./scripts/feeds update -a
+          ./scripts/feeds install -a
+
+      - name: Apply package configuration
+        working-directory: openwrt
+        run: |
+          "${GITHUB_WORKSPACE}/config/openwrt/diy-part2.sh" \
+            "${{ inputs.openwrt_ip }}" \
+            "${{ inputs.use_ccache }}" \
+            "${{ inputs.openwrt_branch }}"
+          make defconfig
+          "${GITHUB_WORKSPACE}/scripts/check-nft-only.sh"
+
+      - name: Download packages
+        working-directory: openwrt
+        run: |
+          make download -j8
+          find dl -size -1024c -exec rm -f {} \;
+
+      - name: Compile OpenWrt rootfs
+        working-directory: openwrt
+        run: |
+          make -j"$(($(nproc) + 1))" V=s || make -j1 V=s
+
+      - name: Prepare rootfs artifact
+        working-directory: openwrt
+        run: |
+          mkdir -p output
+          cp -f bin/targets/*/*/*-generic-rootfs.tar.gz output/
+          cp -f .config output/config
+
+      - name: Package board images
+        uses: ./
+        with:
+          openwrt_path: openwrt/output/*rootfs.tar.gz
+          openwrt_ip: ${{ inputs.openwrt_ip }}
+          openwrt_board: ${{ inputs.openwrt_board }}
+          openwrt_kernel: ${{ inputs.openwrt_kernel }}
+          auto_kernel: ${{ inputs.auto_kernel }}
+          kernel_repo: ophub/kernel
+          kernel_usage: stable
+          builder_name: ${{ inputs.builder_name }}
+
+      - name: Upload firmware release
+        uses: ophub/upload-to-releases@main
+        if: ${{ env.PACKAGED_STATUS == 'success' && !cancelled() }}
+        with:
+          tag: ${{ env.build_tag }}
+          artifacts: ${{ env.PACKAGED_OUTPUTPATH }}/*
+          allow_updates: true
+          remove_artifacts: false
+          replaces_artifacts: true
+          make_latest: true
+          gh_token: ${{ secrets.GITHUB_TOKEN }}

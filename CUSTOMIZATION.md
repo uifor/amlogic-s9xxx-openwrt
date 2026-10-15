@@ -1,0 +1,36 @@
+# Personal OpenWrt
+
+这是基于 [ophub/amlogic-s9xxx-openwrt](https://github.com/ophub/amlogic-s9xxx-openwrt) 的独立定制项目，使用上游的 Amlogic/Rockchip/Allwinner 镜像打包器，默认面向斐讯 N1。
+
+## 默认构建内容
+
+- OpenWrt 官方源码，默认分支：`openwrt-25.12`
+- OpenWrt APK 包管理器
+- `firewall4` 和纯 nftables，不安装 iptables 兼容层
+- Lucky
+- Nikki + Mihomo Meta
+- OpenList
+- vlmcsd KMS
+- Podman + LuCI Podman 管理界面
+- 默认关闭可选无线驱动和固件
+
+## GitHub Actions
+
+打开 `Build Personal OpenWrt`，可以填写：
+
+- `openwrt_branch`：源码分支，例如 `openwrt-25.12` 或未来的 `openwrt-26.x`
+- `openwrt_board`：默认 `s905d`，多个机型用下划线连接
+- `openwrt_kernel`：默认 `6.12.y_6.18.y`
+- `openwrt_ip`：默认 `192.168.1.1`
+
+工作流会先编译通用 `armsr/armv8` rootfs，再调用上游打包器生成目标机型镜像。
+
+## 主要定制入口
+
+- `config/openwrt/config`：OpenWrt 基础配置种子
+- `config/openwrt/feeds.conf.default`：官方和第三方 feeds
+- `config/openwrt/diy-part1.sh`：feeds 更新前的源码处理
+- `config/openwrt/diy-part2.sh`：feeds 安装后的软件包选择和配置
+- `make-openwrt/openwrt-files/`：镜像打包阶段的文件覆盖
+
+第三方插件使用源码参与编译，最终由 OpenWrt 25.12 的构建系统生成 APK。后续切换到 OpenWrt 26 时，优先只修改 Actions 中的 `openwrt_branch`。
