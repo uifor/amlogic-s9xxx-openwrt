@@ -56,6 +56,9 @@ unset_package_family "kmod-ipt(-|$)"
 unset_package_family "kmod-iptables"
 unset_package_family "kmod-nf-ipt"
 unset_package_family "kmod-nft-compat"
+unset_package_family "nf-ipvs"
+unset_package_family "libip[46]tc"
+unset_package_family "iptext"
 set_package firewall4
 set_package nftables-json
 set_package miniupnpd-nftables
@@ -95,6 +98,31 @@ set_package luci-app-podman
 set_package luci-i18n-podman-zh-cn
 set_package netavark
 set_package aardvark-dns
+
+# The current Nikki feed publishes two mutually conflicting providers for the
+# mihomo virtual package. Keeping both package definitions in Kconfig creates
+# a recursive dependency even when only the meta provider is selected. Nikki
+# uses the virtual name, so keep the requested meta implementation and remove
+# the unused alpha provider from the feed/package indexes.
+remove_feed_package() {
+    local feed="${1}"
+    local package="${2}"
+    local candidate
+
+    for candidate in \
+        "package/feeds/${feed}/${package}" \
+        "feeds/${feed}/${package}"; do
+        rm -rf -- "${candidate}"
+    done
+}
+
+remove_feed_package nikki mihomo-alpha
+
+# WeeChat is not part of this image. Its LuCI package currently creates a
+# recursive dependency between the full and minimal provider variants during
+# Kconfig generation, so omit the unused package family entirely.
+remove_feed_package luci applications/luci-app-weechat
+remove_feed_package packages net/weechat
 
 # Default IP and root password are handled by the upstream build scripts.
 if [[ "${openwrt_ip}" != "${default_ip}" ]]; then

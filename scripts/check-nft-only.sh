@@ -2,7 +2,7 @@
 
 set -eu
 
-forbidden="$(grep -E '^CONFIG_PACKAGE_.*(iptables|ip6tables|xtables|ipset).*=(y|m)$|^CONFIG_PACKAGE_(kmod-ipt(-|$)|kmod-ip6tables(-|$)|kmod-iptables(-|$)|kmod-nf-ipt(-|$)|libxtables|libipset).*=(y|m)$' .config || true)"
+forbidden="$(grep -E '^CONFIG_PACKAGE_.*(iptables|ip6tables|xtables|ipset|iptext|nf-ipvs).*=(y|m)$|^CONFIG_PACKAGE_(kmod-ipt(-|$)|kmod-ip6tables(-|$)|kmod-iptables(-|$)|kmod-nf-ipt(-|$)|kmod-nf-ipvs(-|$)|libxtables|libip[46]tc|libipset).*=(y|m)$' .config || true)"
 if [[ -n "${forbidden}" ]]; then
     echo "Forbidden iptables compatibility packages are enabled:" >&2
     echo "${forbidden}" >&2
