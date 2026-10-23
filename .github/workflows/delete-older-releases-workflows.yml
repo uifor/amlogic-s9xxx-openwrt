@@ -6,7 +6,6 @@
 name: Delete older releases and workflows
 
 on:
-  repository_dispatch:
   workflow_dispatch:
     inputs:
       delete_releases:

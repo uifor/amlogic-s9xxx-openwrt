@@ -9,7 +9,6 @@
 name: Build OpenWrt using ImageBuilder
 
 on:
-  repository_dispatch:
   workflow_dispatch:
     inputs:
       releases_branch:
