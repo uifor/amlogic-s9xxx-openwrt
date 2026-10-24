@@ -41,6 +41,12 @@ set_package() {
     echo "CONFIG_PACKAGE_${package}=y" >>.config
 }
 
+unset_feed_repository() {
+    local feed="${1}"
+    sed -i -E "/^(# )?CONFIG_FEED_${feed}(=y|=m| is not set)$/d" .config
+    echo "# CONFIG_FEED_${feed} is not set" >>.config
+}
+
 unset_package_family() {
     local pattern="${1}"
     sed -i -E "/^CONFIG_PACKAGE_.*${pattern}.*=y$/ {
@@ -64,6 +70,31 @@ unset_package_family "iptext"
 set_package firewall4
 set_package nftables-json
 set_package miniupnpd-nftables
+
+# Keep the LuCI entry point and both template runtimes explicit. These options
+# must be present after feed installation because the source configuration is
+# loaded before the feeds exist, and make defconfig can otherwise discard them
+# when a feed index is incomplete or changes package visibility.
+set_package luci
+set_package luci-light
+set_package luci-base
+set_package luci-compat
+set_package luci-lua-runtime
+set_package luci-mod-admin-full
+set_package luci-theme-bootstrap
+set_package ucode-mod-lua
+set_package luci-app-package-manager
+set_package rpcd-mod-luci
+set_package uhttpd
+set_package uhttpd-mod-ubus
+
+# These repositories are source feeds used only during the build. They are
+# not published at downloads.openwrt.org, so do not emit broken runtime APK
+# URLs for them while keeping their packages in the image.
+unset_feed_repository nikki
+unset_feed_repository lucky
+unset_feed_repository openlist
+unset_feed_repository kms
 
 # Keep the kernel-side nftables features needed by Nikki and firewall4.
 set_package kmod-nft-bridge

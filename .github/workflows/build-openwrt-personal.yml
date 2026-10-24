@@ -103,7 +103,8 @@ jobs:
         run: |
           cp -f config/openwrt/feeds.conf.default openwrt/feeds.conf.default
           cp -f config/openwrt/config openwrt/.config
-          chmod +x config/openwrt/diy-part1.sh config/openwrt/diy-part2.sh scripts/check-nft-only.sh
+          chmod +x config/openwrt/diy-part1.sh config/openwrt/diy-part2.sh \
+            scripts/check-nft-only.sh scripts/check-luci-runtime.sh
 
       - name: Update feeds
         working-directory: openwrt
@@ -124,6 +125,7 @@ jobs:
             "${{ inputs.network_dns }}"
           make defconfig
           "${GITHUB_WORKSPACE}/scripts/check-nft-only.sh"
+          "${GITHUB_WORKSPACE}/scripts/check-luci-runtime.sh"
 
       - name: Download packages
         working-directory: openwrt
@@ -135,6 +137,16 @@ jobs:
         working-directory: openwrt
         run: |
           make -j"$(($(nproc) + 1))" V=s || make -j1 V=s
+
+      - name: Verify LuCI runtime in rootfs
+        working-directory: openwrt
+        run: |
+          rootfs_archive="$(find bin/targets -type f -name '*-generic-rootfs.tar.gz' -print -quit)"
+          [[ -n "${rootfs_archive}" ]] || {
+            echo "Unable to locate the generated generic rootfs archive" >&2
+            exit 1
+          }
+          "${GITHUB_WORKSPACE}/scripts/check-luci-runtime.sh" "${rootfs_archive}"
 
       - name: Prepare rootfs artifact
         working-directory: openwrt
