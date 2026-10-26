@@ -7,6 +7,7 @@
 - OpenWrt 官方源码，默认分支：`openwrt-25.12`
 - OpenWrt APK 包管理器
 - `firewall4` 和纯 nftables，不安装 iptables 兼容层
+- LuCI 默认主题为 Bootstrap
 - Lucky
 - Nikki + Mihomo Meta
 - OpenList
@@ -36,7 +37,7 @@
 
 旁路模式会在首次启动时设置静态 LAN 地址、默认网关和 DNS，并关闭 LAN DHCP、IPv6 RA/DHCPv6/代理通告。客户端仍需将网关或 DNS 按需指向 N1，旁路模式不会修改主路由器的 DHCP 配置。
 
-Podman 默认将镜像和容器数据存放在 `/mnt/mmcblk2p4/podman`，运行时数据位于 `/run/containers/storage`。固件会把 `/dev/mmcblk2p4` 挂载到 `/mnt/mmcblk2p4`；如果该分区未挂载，Podman 会保持停止，避免把容器数据误写入系统 overlay。
+Podman 默认将镜像和容器数据存放在 `/mnt/mmcblk2p4/podman`，运行时数据位于 `/run/containers/storage`。固件会把 `/dev/mmcblk2p4` 挂载到 `/mnt/mmcblk2p4`；如果该分区未挂载，Podman 会保持停止，避免把容器数据误写入系统 overlay。通过晶晨宝盒安装到 eMMC 前，安装脚本会先停止 Podman 服务和运行中的容器，再卸载相关分区。
 
 ## 主要定制入口
 

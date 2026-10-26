@@ -1,0 +1,14 @@
+--- a/root/usr/sbin/openwrt-install-amlogic
++++ b/root/usr/sbin/openwrt-install-amlogic
+@@ -234,1 +234,11 @@
++# personal-podman-before-emmc-unmount
++if grep -qs '[[:space:]]/mnt/mmcblk2p4[[:space:]]' /proc/mounts &&
++    command -v podman >/dev/null 2>&1; then
++    if [ -x /etc/init.d/podman ]; then
++        /etc/init.d/podman stop || error_msg "Unable to stop Podman before EMMC installation."
++    fi
++    podman pod stop --all || error_msg "Unable to stop Podman pods before EMMC installation."
++    podman container stop --all || error_msg "Unable to stop Podman containers before EMMC installation."
++fi
++
+ # umount all other mount points

@@ -54,6 +54,13 @@ for package in "${required_packages[@]}"; do
     fi
 done
 
+forbidden_packages="$(grep -E '^CONFIG_PACKAGE_(luci-app-(ddns|frpc|frps|samba4|ttyd|upnp)|luci-i18n-(ddns|frpc|frps|samba4|ttyd|upnp)-[^=]+|ddns-scripts.*|frpc|frps|samba4-[^=]+|ttyd|miniupnpd-nftables|luci-theme-material)=(y|m)$' .config || true)"
+if [[ -n "${forbidden_packages}" ]]; then
+    echo "Unrequested LuCI services or the Material theme are enabled:" >&2
+    echo "${forbidden_packages}" >&2
+    exit 1
+fi
+
 if ! grep -q '^CONFIG_LUCI_LANG_zh_Hans=y$' .config; then
     echo "Simplified Chinese LuCI language is not enabled in the final .config" >&2
     exit 1
@@ -81,6 +88,8 @@ required_entries=(
     etc/init.d/personal-cgroup
     etc/init.d/podman
     etc/uci-defaults/99-personal-podman
+    etc/uci-defaults/99-personal-theme
+    usr/sbin/openwrt-install-amlogic
 )
 
 required_lmo=(
@@ -131,6 +140,20 @@ grep -q '^graphroot = "/mnt/mmcblk2p4/podman"$' <<<"${storage_conf}"
 podman_init_entry="$(grep -E '(^|/)etc/init\.d/podman$' <<<"${archive_entries}" | head -n 1)"
 podman_init="$(tar -xOzf "${rootfs_archive}" "${podman_init_entry}")"
 grep -q '/mnt/mmcblk2p4' <<<"${podman_init}"
+
+theme_defaults_entry="$(grep -E '(^|/)etc/uci-defaults/99-personal-theme$' <<<"${archive_entries}" | head -n 1)"
+theme_defaults="$(tar -xOzf "${rootfs_archive}" "${theme_defaults_entry}")"
+grep -q 'set luci.main.mediaurlbase=/luci-static/bootstrap' <<<"${theme_defaults}"
+
+amlogic_installer_entry="$(grep -E '(^|/)usr/sbin/openwrt-install-amlogic$' <<<"${archive_entries}" | head -n 1)"
+amlogic_installer="$(tar -xOzf "${rootfs_archive}" "${amlogic_installer_entry}")"
+installer_guard_line="$(grep -n 'personal-podman-before-emmc-unmount' <<<"${amlogic_installer}" | cut -d: -f1)"
+installer_unmount_line="$(grep -n '# umount all other mount points' <<<"${amlogic_installer}" | cut -d: -f1)"
+if [[ -z "${installer_guard_line}" || -z "${installer_unmount_line}" ||
+    "${installer_guard_line}" -ge "${installer_unmount_line}" ]]; then
+    echo "The Amlogic installer does not stop Podman before unmounting eMMC" >&2
+    exit 1
+fi
 
 repositories_entry="$(grep -E '(^|/)etc/apk/repositories\.d/distfeeds\.list$' <<<"${archive_entries}" | head -n 1)"
 if [[ -n "${repositories_entry}" ]]; then

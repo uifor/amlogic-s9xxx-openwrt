@@ -11,6 +11,7 @@ openwrt_branch="${3:-openwrt-25.12}"
 network_mode="${4:-bypass}"
 network_gateway="${5:-10.0.0.1}"
 network_dns="${6:-10.0.0.1}"
+project_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 
 # Add the standalone Podman LuCI package after official feeds have been
 # installed. Its dependencies are provided by those feeds; adding it earlier
@@ -26,6 +27,16 @@ git clone --depth 1 https://github.com/ophub/luci-app-amlogic.git "${amlogic_rep
 rm -rf package/luci-app-amlogic
 cp -a "${amlogic_repo_dir}/luci-app-amlogic" package/luci-app-amlogic
 rm -rf -- "${amlogic_repo_dir}"
+
+amlogic_installer="package/luci-app-amlogic/root/usr/sbin/openwrt-install-amlogic"
+if ! grep -q 'personal-podman-before-emmc-unmount' "${amlogic_installer}"; then
+    patch --batch --forward -d package/luci-app-amlogic -p1 \
+        < "${project_root}/config/openwrt/patches/0001-stop-podman-before-emmc-unmount.patch"
+fi
+grep -q 'personal-podman-before-emmc-unmount' "${amlogic_installer}" || {
+    echo "Unable to apply the Podman pre-unmount patch to luci-app-amlogic" >&2
+    exit 1
+}
 
 # scripts/feeds has already generated package metadata before this script is
 # called. Invalidate the package scan artifacts so make defconfig discovers
@@ -82,6 +93,9 @@ unset_package_family() {
     }" .config
 }
 
+# Do not ship unrelated service menus or their runtime packages in this image.
+unset_package_family "(luci-app-(ddns|frpc|frps|samba4|ttyd|upnp)|luci-i18n-(ddns|frpc|frps|samba4|ttyd|upnp)-|ddns-scripts|frpc|frps|samba4|ttyd|miniupnpd-nftables|luci-theme-material)"
+
 # This project intentionally uses APK and the nftables firewall stack only.
 set_package apk-mbedtls
 unset_package_family "(opkg|iptables|ip6tables|xtables|ipset)"
@@ -96,7 +110,6 @@ unset_package_family "libip[46]tc"
 unset_package_family "iptext"
 set_package firewall4
 set_package nftables-json
-set_package miniupnpd-nftables
 
 # Keep the LuCI entry point and both template runtimes explicit. These options
 # must be present after feed installation because the source configuration is
@@ -502,3 +515,17 @@ fi
 exit 0
 EOF
 chmod +x "${podman_defaults_file}"
+
+theme_defaults_file="files/etc/uci-defaults/99-personal-theme"
+rm -f "${theme_defaults_file}"
+mkdir -p "$(dirname "${theme_defaults_file}")"
+cat >"${theme_defaults_file}" <<'EOF'
+#!/bin/sh
+
+uci -q batch <<'UCI'
+set luci.themes.Bootstrap=/luci-static/bootstrap
+set luci.main.mediaurlbase=/luci-static/bootstrap
+commit luci
+UCI
+EOF
+chmod +x "${theme_defaults_file}"
