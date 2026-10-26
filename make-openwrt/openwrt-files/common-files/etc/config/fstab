@@ -20,3 +20,11 @@ config  mount
 		option fstype 'btrfs'
 		option options 'compress=zstd:6'
 		option enabled_fsck '1'
+
+config  mount
+		option enabled '1'
+		option device '/dev/mmcblk2p4'
+		option target '/mnt/mmcblk2p4'
+		option fstype 'auto'
+		option options 'rw,noatime'
+		option enabled_fsck '0'

@@ -17,6 +17,14 @@ required_packages=(
     rpcd-mod-luci
     uhttpd
     uhttpd-mod-ubus
+    luci-app-amlogic
+    luci-i18n-base-zh-cn
+    luci-i18n-amlogic-zh-cn
+    luci-i18n-lucky-zh-cn
+    luci-i18n-nikki-zh-cn
+    luci-i18n-openlist2-zh-cn
+    luci-i18n-vlmcsd-zh-cn
+    luci-i18n-podman-zh-cn
 )
 
 for package in "${required_packages[@]}"; do
@@ -44,6 +52,35 @@ required_entries=(
     usr/share/ucode/luci/template/header.ut
     usr/share/ucode/luci/template/themes/bootstrap/header.ut
     www/luci-static/bootstrap/cascade.css
+    etc/containers/storage.conf
+    etc/init.d/personal-cgroup
+    etc/init.d/podman
+    etc/uci-defaults/99-personal-podman
+)
+
+required_lmo=(
+    usr/lib/lua/luci/i18n/base.zh-cn.lmo
+    usr/lib/lua/luci/i18n/amlogic.zh-cn.lmo
+    usr/lib/lua/luci/i18n/lucky.zh-cn.lmo
+    usr/lib/lua/luci/i18n/nikki.zh-cn.lmo
+    usr/lib/lua/luci/i18n/openlist2.zh-cn.lmo
+    usr/lib/lua/luci/i18n/vlmcsd.zh-cn.lmo
+    usr/lib/lua/luci/i18n/podman.zh-cn.lmo
+)
+
+required_luci_files=(
+    usr/share/luci/menu.d/luci-app-amlogic.json
+    usr/share/luci/menu.d/luci-app-lucky.json
+    usr/share/luci/menu.d/luci-app-nikki.json
+    usr/share/luci/menu.d/luci-app-openlist2.json
+    usr/share/luci/menu.d/luci-app-vlmcsd.json
+    usr/share/luci/menu.d/luci-app-podman.json
+    usr/share/rpcd/acl.d/luci-app-amlogic.json
+    usr/share/rpcd/acl.d/luci-app-lucky.json
+    usr/share/rpcd/acl.d/luci-app-nikki.json
+    usr/share/rpcd/acl.d/luci-app-openlist2.json
+    usr/share/rpcd/acl.d/luci-app-vlmcsd.json
+    usr/share/rpcd/acl.d/luci-app-podman.json
 )
 
 for entry in "${required_entries[@]}"; do
@@ -52,6 +89,23 @@ for entry in "${required_entries[@]}"; do
         exit 1
     fi
 done
+
+for entry in "${required_lmo[@]}" "${required_luci_files[@]}"; do
+    if ! grep -Eq "(^|/)${entry}$" <<<"${archive_entries}"; then
+        echo "Required LuCI translation/menu/ACL file is missing from rootfs: ${entry}" >&2
+        exit 1
+    fi
+done
+
+storage_conf_entry="$(grep -E '(^|/)etc/containers/storage\.conf$' <<<"${archive_entries}" | head -n 1)"
+storage_conf="$(tar -xOzf "${rootfs_archive}" "${storage_conf_entry}")"
+grep -q '^driver = "overlay"$' <<<"${storage_conf}"
+grep -q '^runroot = "/run/containers/storage"$' <<<"${storage_conf}"
+grep -q '^graphroot = "/mnt/mmcblk2p4/podman"$' <<<"${storage_conf}"
+
+podman_init_entry="$(grep -E '(^|/)etc/init\.d/podman$' <<<"${archive_entries}" | head -n 1)"
+podman_init="$(tar -xOzf "${rootfs_archive}" "${podman_init_entry}")"
+grep -q '/mnt/mmcblk2p4' <<<"${podman_init}"
 
 repositories_entry="$(grep -E '(^|/)etc/apk/repositories\.d/distfeeds\.list$' <<<"${archive_entries}" | head -n 1)"
 if [[ -n "${repositories_entry}" ]]; then

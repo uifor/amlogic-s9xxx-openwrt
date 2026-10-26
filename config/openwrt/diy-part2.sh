@@ -119,14 +119,19 @@ set_package wpad-basic-mbedtls
 # Personal package set.
 set_package lucky
 set_package luci-app-lucky
+set_package luci-i18n-lucky-zh-cn
 set_package mihomo-meta
 set_package nikki
 set_package luci-app-nikki
 set_package luci-i18n-nikki-zh-cn
 set_package openlist2
 set_package luci-app-openlist2
+set_package luci-i18n-openlist2-zh-cn
 set_package vlmcsd
 set_package luci-app-vlmcsd
+set_package luci-i18n-vlmcsd-zh-cn
+set_package luci-i18n-base-zh-cn
+set_package luci-i18n-amlogic-zh-cn
 set_package podman
 set_package luci-app-podman
 set_package luci-i18n-podman-zh-cn
@@ -244,8 +249,11 @@ sed -i "s|DISTRIB_SOURCEREPO='.*'|DISTRIB_SOURCEREPO='github.com/openwrt/openwrt
 sed -i "s|DISTRIB_SOURCECODE='.*'|DISTRIB_SOURCECODE='openwrt'|g" package/base-files/files/etc/openwrt_release
 sed -i "s|DISTRIB_SOURCEBRANCH='.*'|DISTRIB_SOURCEBRANCH='${openwrt_branch}'|g" package/base-files/files/etc/openwrt_release
 
+amlogic_repo_dir="$(mktemp -d)"
+git clone --depth 1 https://github.com/ophub/luci-app-amlogic.git "${amlogic_repo_dir}"
 rm -rf package/luci-app-amlogic
-git clone --depth 1 https://github.com/ophub/luci-app-amlogic.git package/luci-app-amlogic
+cp -a "${amlogic_repo_dir}/luci-app-amlogic" package/luci-app-amlogic
+rm -rf -- "${amlogic_repo_dir}"
 
 # OpenWrt 25.12's netavark package does not yet pass the firewall backend to
 # Cargo. Netavark otherwise compiles with its upstream iptables default.
@@ -264,13 +272,19 @@ done
     exit 1
 }
 
+# Force the value before RustBinPackage is evaluated. Appending a variable
+# after the eval call is too late for OpenWrt's Rust package helper.
+sed -i -E 's/NETAVARK_DEFAULT_FW=[^[:space:]\\]+/NETAVARK_DEFAULT_FW=nftables/g' \
+    "${netavark_makefile}"
 if ! grep -q 'NETAVARK_DEFAULT_FW=nftables' "${netavark_makefile}"; then
-    cat >>"${netavark_makefile}" <<'EOF'
-
-# Use netfilter nftables directly; do not build netavark around iptables.
-CARGO_PKG_VARS += NETAVARK_DEFAULT_FW=nftables
-EOF
+    sed -i '/^[[:space:]]*\$(eval \$(call RustBinPackage,netavark))/i CARGO_PKG_VARS += NETAVARK_DEFAULT_FW=nftables' \
+        "${netavark_makefile}"
 fi
+
+grep -q 'NETAVARK_DEFAULT_FW=nftables' "${netavark_makefile}" || {
+    echo "Unable to force netavark's nftables backend" >&2
+    exit 1
+}
 
 # Make the nftables backend explicit in Podman's network configuration. The
 # upstream file already defines the network table, but keep this tolerant of
@@ -328,6 +342,34 @@ if [[ -f "${luci_podman_defaults}" ]]; then
 else
     echo "Unable to locate the LuCI Podman default configuration" >&2
     exit 1
+fi
+
+podman_init_file=""
+for candidate in \
+    package/feeds/packages/podman/files/podman.init \
+    feeds/packages/utils/podman/files/podman.init; do
+    if [[ -f "${candidate}" ]]; then
+        podman_init_file="${candidate}"
+        break
+    fi
+done
+
+[[ -n "${podman_init_file}" ]] || {
+    echo "Unable to locate the Podman init script" >&2
+    exit 1
+}
+
+# The data partition must be mounted before Podman is allowed to start. This
+# prevents a missing p4 mount from silently filling the system overlay.
+if ! grep -q 'personal-podman-storage' "${podman_init_file}"; then
+    sed -i '/^start_service() {/a\
+    if ! grep -qs "[[:space:]]/mnt/mmcblk2p4[[:space:]]" /proc/mounts; then\
+        logger -t podman "Podman not started: /mnt/mmcblk2p4 is not mounted"\
+        return 1\
+    fi\
+    mkdir -p /mnt/mmcblk2p4/podman /run/containers/storage /run/podman\
+    # personal-podman-storage: keep this guard tied to the customized image\
+' "${podman_init_file}"
 fi
 
 # Podman requires a cgroup v2 hierarchy at the conventional path. OpenWrt's
@@ -392,16 +434,23 @@ stop() {
 EOF
 chmod +x "${cgroup_init_file}"
 
-# Prepare a rootful Podman installation on first boot. The storage paths are
-# deliberately kept on the normal overlay filesystem; users can move them to
-# a larger disk later without guessing a device or mount point here.
+# Prepare a rootful Podman installation on first boot. The data partition is
+# mounted by block-mount and is the only location used for persistent storage.
+storage_conf_file="files/etc/containers/storage.conf"
+rm -f "${storage_conf_file}"
+mkdir -p "$(dirname "${storage_conf_file}")"
+cat >"${storage_conf_file}" <<'EOF'
+[storage]
+driver = "overlay"
+runroot = "/run/containers/storage"
+graphroot = "/mnt/mmcblk2p4/podman"
+EOF
+
 podman_defaults_file="files/etc/uci-defaults/99-personal-podman"
 rm -f "${podman_defaults_file}"
 mkdir -p "$(dirname "${podman_defaults_file}")"
 cat >"${podman_defaults_file}" <<'EOF'
 #!/bin/sh
-
-mkdir -p /var/lib/containers/storage /run/containers/storage /run/podman
 
 if [ -x /etc/init.d/personal-cgroup ]; then
     /etc/init.d/personal-cgroup enable
@@ -409,13 +458,16 @@ fi
 
 if [ -x /etc/init.d/personal-cgroup ] &&
     /etc/init.d/personal-cgroup start &&
-    [ -r /sys/fs/cgroup/cgroup.controllers ]; then
+    [ -r /sys/fs/cgroup/cgroup.controllers ] &&
+    grep -qs "[[:space:]]/mnt/mmcblk2p4[[:space:]]" /proc/mounts; then
+    mkdir -p /mnt/mmcblk2p4/podman /run/containers/storage /run/podman
     if [ -x /etc/init.d/podman ]; then
         /etc/init.d/podman enable
         /etc/init.d/podman start
     fi
 else
-    logger -t personal-podman "Podman not started: cgroup2 is unavailable" 2>/dev/null || true
+    logger -t personal-podman \
+        "Podman not started: cgroup2 or /mnt/mmcblk2p4 is unavailable" 2>/dev/null || true
 fi
 
 # The LuCI package's migration script has already moved this configuration by
