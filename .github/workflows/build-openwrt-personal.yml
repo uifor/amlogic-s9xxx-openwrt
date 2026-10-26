@@ -99,10 +99,9 @@ jobs:
           ln -s /builder/openwrt "${GITHUB_WORKSPACE}/openwrt"
           echo "build_tag=OpenWrt_personal_${{ inputs.openwrt_branch }}_$(date +'%Y.%m')" >> "${GITHUB_ENV}"
 
-      - name: Load project configuration
+      - name: Prepare feed configuration
         run: |
           cp -f config/openwrt/feeds.conf.default openwrt/feeds.conf.default
-          cp -f config/openwrt/config openwrt/.config
           chmod +x config/openwrt/diy-part1.sh config/openwrt/diy-part2.sh \
             scripts/check-nft-only.sh scripts/check-luci-runtime.sh
 
@@ -112,6 +111,10 @@ jobs:
           "${GITHUB_WORKSPACE}/config/openwrt/diy-part1.sh" "${{ inputs.openwrt_branch }}"
           ./scripts/feeds update -a
           ./scripts/feeds install -a
+
+      - name: Load project configuration
+        working-directory: openwrt
+        run: cp -f "${GITHUB_WORKSPACE}/config/openwrt/config" .config
 
       - name: Apply package configuration
         working-directory: openwrt

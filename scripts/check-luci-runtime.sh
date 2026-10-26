@@ -30,9 +30,34 @@ required_packages=(
 for package in "${required_packages[@]}"; do
     if ! grep -q "^CONFIG_PACKAGE_${package}=y$" .config; then
         echo "Required LuCI package is not enabled in the final .config: ${package}" >&2
+        if [[ "${package}" == "luci-i18n-base-zh-cn" ]]; then
+            echo "Relevant final configuration:" >&2
+            grep -E '^(# )?CONFIG_(LUCI_LANG_zh_Hans|PACKAGE_luci-base|PACKAGE_luci-i18n-base-zh-cn)(=y|=m| is not set)$' .config >&2 || true
+
+            for metadata_file in tmp/.config-package.in tmp/.packageinfo; do
+                echo "Package metadata: ${metadata_file}" >&2
+                if [[ ! -f "${metadata_file}" ]]; then
+                    echo "  metadata file not found" >&2
+                    continue
+                fi
+
+                if [[ "${metadata_file}" == "tmp/.config-package.in" ]]; then
+                    grep -n -B 3 -A 8 -F 'luci-i18n-base-zh-cn' "${metadata_file}" >&2 ||
+                        echo "  no luci-i18n-base-zh-cn symbol found" >&2
+                else
+                    grep -n -B 2 -A 12 -F 'Package: luci-i18n-base-zh-cn' "${metadata_file}" >&2 ||
+                        echo "  no luci-i18n-base-zh-cn package record found" >&2
+                fi
+            done
+        fi
         exit 1
     fi
 done
+
+if ! grep -q '^CONFIG_LUCI_LANG_zh_Hans=y$' .config; then
+    echo "Simplified Chinese LuCI language is not enabled in the final .config" >&2
+    exit 1
+fi
 
 if [[ -z "${rootfs_archive}" ]]; then
     echo "LuCI configuration check passed"
