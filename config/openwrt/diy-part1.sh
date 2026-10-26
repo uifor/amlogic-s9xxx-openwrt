@@ -12,8 +12,3 @@ feed_branch="${openwrt_branch}"
 sed -i -E \
     "s#^(src-git (packages|luci|routing|telephony|video) [^;]+;).*\$#\1${feed_branch}#" \
     feeds.conf.default
-
-# The Podman UI is a standalone package repository rather than a conventional
-# OpenWrt feed, so place it directly under package/.
-rm -rf package/luci-app-podman
-git clone --depth 1 https://github.com/Zerogiven-OpenWRT-Packages/luci-app-podman.git package/luci-app-podman

@@ -12,6 +12,33 @@ network_mode="${4:-bypass}"
 network_gateway="${5:-10.0.0.1}"
 network_dns="${6:-10.0.0.1}"
 
+# Add the standalone Podman LuCI package after official feeds have been
+# installed. Its dependencies are provided by those feeds; adding it earlier
+# makes scripts/feeds inspect it before those package definitions are linked
+# and emit false "dependency does not exist" warnings.
+rm -rf package/luci-app-podman
+git clone --depth 1 https://github.com/Zerogiven-OpenWRT-Packages/luci-app-podman.git package/luci-app-podman
+
+# Add the standalone Amlogic LuCI package after feeds are installed for the
+# same reason; both applications will be discovered by the refreshed scan.
+amlogic_repo_dir="$(mktemp -d)"
+git clone --depth 1 https://github.com/ophub/luci-app-amlogic.git "${amlogic_repo_dir}"
+rm -rf package/luci-app-amlogic
+cp -a "${amlogic_repo_dir}/luci-app-amlogic" package/luci-app-amlogic
+rm -rf -- "${amlogic_repo_dir}"
+
+# scripts/feeds has already generated package metadata before this script is
+# called. Invalidate the package scan artifacts so make defconfig discovers
+# both newly added LuCI packages and their dependency graphs.
+rm -f \
+    tmp/.packageinfo \
+    tmp/.config-package.in \
+    tmp/.packagedeps \
+    tmp/.packageauxvars \
+    tmp/.packageusergroup \
+    tmp/info/.files-packageinfo-* \
+    tmp/info/.overrides-packageinfo-*
+
 [[ "${openwrt_ip}" =~ ${ip_regex} ]] || {
     echo "Invalid OpenWrt IP address: ${openwrt_ip}" >&2
     exit 1
@@ -130,6 +157,7 @@ set_package luci-i18n-openlist2-zh-cn
 set_package vlmcsd
 set_package luci-app-vlmcsd
 set_package luci-i18n-vlmcsd-zh-cn
+set_package luci-app-amlogic
 set_package luci-i18n-base-zh-cn
 set_package luci-i18n-amlogic-zh-cn
 set_package podman
@@ -248,12 +276,6 @@ sed -i "s|DISTRIB_REVISION='.*'|DISTRIB_REVISION='R$(date +%Y.%m.%d)'|g" package
 sed -i "s|DISTRIB_SOURCEREPO='.*'|DISTRIB_SOURCEREPO='github.com/openwrt/openwrt'|g" package/base-files/files/etc/openwrt_release
 sed -i "s|DISTRIB_SOURCECODE='.*'|DISTRIB_SOURCECODE='openwrt'|g" package/base-files/files/etc/openwrt_release
 sed -i "s|DISTRIB_SOURCEBRANCH='.*'|DISTRIB_SOURCEBRANCH='${openwrt_branch}'|g" package/base-files/files/etc/openwrt_release
-
-amlogic_repo_dir="$(mktemp -d)"
-git clone --depth 1 https://github.com/ophub/luci-app-amlogic.git "${amlogic_repo_dir}"
-rm -rf package/luci-app-amlogic
-cp -a "${amlogic_repo_dir}/luci-app-amlogic" package/luci-app-amlogic
-rm -rf -- "${amlogic_repo_dir}"
 
 # OpenWrt 25.12's netavark package does not yet pass the firewall backend to
 # Cargo. Netavark otherwise compiles with its upstream iptables default.
